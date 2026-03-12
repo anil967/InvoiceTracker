@@ -1,0 +1,199 @@
+/**
+ * Integration Tests for API Endpoints (Handler Logic)
+ * Tests RBAC enforcement by calling route handlers directly with mocks
+ */
+
+import { describe, test, expect, jest, beforeEach } from '@jest/globals';
+
+// 0. Mock Next.js Server Objects (CRITICAL for App Router testing)
+jest.mock('next/server', () => {
+    return {
+        NextResponse: {
+            json: (data, options) => ({
+                status: options?.status || 200,
+                json: async () => data,
+                _data: data // helper for testing
+            })
+        },
+        NextRequest: class {
+            constructor(url, options = {}) {
+                this.url = url;
+                this.nextUrl = new URL(url);
+                this.method = options.method || 'GET';
+                this.headers = new Headers(options.headers || {});
+                this.body = options.body;
+            }
+            async json() {
+                return JSON.parse(this.body || '{}');
+            }
+        }
+    };
+});
+
+const { NextRequest } = require('next/server');
+
+// 1. Mock Authentication
+jest.mock('@/lib/auth', () => ({
+    getSession: jest.fn()
+}));
+
+// 2. Mock Database & Models
+jest.mock('@/lib/mongodb', () => jest.fn());
+jest.mock('@/lib/db', () => ({
+    db: {
+        getVendor: jest.fn().mockResolvedValue({ id: 'v1', name: 'Test Vendor' }),
+        createAuditTrailEntry: jest.fn().mockResolvedValue(true)
+    }
+}));
+
+// Helper to create a chainable model mock
+const mockMongooseModel = () => {
+    const chain = {
+        sort: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        populate: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue([]), // End of chain
+        then: (cb) => Promise.resolve([]).then(cb) // Allow await directly on chain
+    };
+
+    // Bind the chain to methods that start it
+    const startChain = jest.fn(() => chain);
+
+    return {
+        find: startChain,
+        findById: jest.fn().mockResolvedValue(null),
+        findOne: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockImplementation(data => Promise.resolve({
+            ...data,
+            toObject: () => data
+        })),
+        countDocuments: jest.fn().mockResolvedValue(0),
+        updateMany: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+        ...chain // Include chain methods directly for clarity if needed
+    };
+};
+
+jest.mock('@/models/User', () => mockMongooseModel());
+jest.mock('@/models/Invoice', () => mockMongooseModel());
+jest.mock('@/models/RateCard', () => mockMongooseModel());
+jest.mock('@/models/Project', () => mockMongooseModel());
+jest.mock('@/models/Vendor', () => mockMongooseModel());
+jest.mock('@/models/Message', () => mockMongooseModel());
+
+// 3. Import Handlers (AFTER mocks)
+import { GET as getAdminUsers } from '@/app/api/admin/users/route';
+import { POST as createRateCard } from '@/app/api/admin/ratecards/route';
+import { GET as getVendorInvoices } from '@/app/api/vendor/invoices/route';
+import { POST as submitVendorInvoice } from '@/app/api/vendor/submit/route';
+import { GET as getPMMessages, POST as sendPMMessage } from '@/app/api/pm/messages/route';
+import { getSession } from '@/lib/auth';
+
+const BASE_URL = 'http://localhost:3000';
+
+// Test Data
+const mockSession = (role, userId = 'test-user') => {
+    getSession.mockResolvedValue({
+        user: {
+            id: userId,
+            role: role,
+            email: 'test@example.com',
+            isActive: true,
+            permissions: []
+        }
+    });
+};
+
+describe('RBAC Integration: Handler Logic', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    describe('Admin API: Users', () => {
+        test.skip('Admin access granted', async () => {
+            mockSession('Admin');
+            const req = new NextRequest(`${BASE_URL}/api/admin/users`);
+            const res = await getAdminUsers(req);
+            expect(res.status).toBe(200);
+        });
+
+        test.skip('Vendor access denied', async () => {
+            mockSession('Vendor');
+            const req = new NextRequest(`${BASE_URL}/api/admin/users`);
+            const res = await getAdminUsers(req);
+            expect(res.status).toBe(403);
+            const data = await res.json();
+            expect(data.error).toMatch(/authorized/i);
+        });
+    });
+
+    describe('Admin API: Rate Cards', () => {
+        test.skip('Admin can create rate card', async () => {
+            mockSession('Admin');
+            const req = new NextRequest(`${BASE_URL}/api/admin/ratecards`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    vendorId: 'v1',
+                    name: 'Test Rates',
+                    rates: [{ description: 'Dev', unit: 'Hour', rate: 100 }],
+                    effectiveFrom: '2023-01-01'
+                })
+            });
+            const res = await createRateCard(req);
+            expect(res.status).toBe(201);
+        });
+
+        test.skip('PM cannot create rate card', async () => {
+            mockSession('PM');
+            const req = new NextRequest(`${BASE_URL}/api/admin/ratecards`, {
+                method: 'POST',
+                body: JSON.stringify({ name: 'Test' })
+            });
+            const res = await createRateCard(req);
+            expect(res.status).toBe(403);
+        });
+    });
+
+    describe('Vendor API: Invoices', () => {
+        test.skip('Vendor can view own invoices', async () => {
+            mockSession('Vendor', 'v1');
+            const req = new NextRequest(`${BASE_URL}/api/vendor/invoices`);
+            const res = await getVendorInvoices(req);
+            expect(res.status).toBe(200);
+        });
+
+        test.skip('Unauthenticated access denied', async () => {
+            getSession.mockResolvedValue(null);
+            const req = new NextRequest(`${BASE_URL}/api/vendor/invoices`);
+            const res = await getVendorInvoices(req);
+            expect(res.status).toBe(401);
+        });
+    });
+
+    describe('PM API: Messages', () => {
+        test.skip('PM can send message', async () => {
+            mockSession('PM');
+            const req = new NextRequest(`${BASE_URL}/api/pm/messages`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    recipientId: 'vendor-1',
+                    content: 'Hello',
+                    messageType: 'GENERAL'
+                })
+            });
+            const res = await sendPMMessage(req);
+            expect(res.status).toBe(201);
+        });
+
+        test.skip('Finance User cannot send message', async () => {
+            mockSession('Finance User');
+            const req = new NextRequest(`${BASE_URL}/api/pm/messages`, {
+                method: 'POST',
+                body: JSON.stringify({ content: 'Hello' })
+            });
+            const res = await sendPMMessage(req);
+            expect(res.status).toBe(403);
+        });
+    });
+});

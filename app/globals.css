@@ -1,0 +1,239 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
+
+@plugin "daisyui" {
+  themes:
+    light --default,
+    dark;
+}
+
+@plugin "daisyui/theme" {
+  name: "light";
+  default: true;
+  --color-base-100: oklch(98% 0.02 240);
+  --color-base-200: oklch(95% 0.03 240);
+  --color-base-300: oklch(92% 0.04 240);
+  --color-base-content: oklch(20% 0.05 240);
+  --color-primary: oklch(55% 0.25 260);
+  --color-primary-content: oklch(98% 0.01 260);
+  --color-secondary: oklch(70% 0.2 200);
+  --color-secondary-content: oklch(98% 0.01 200);
+  --color-accent: oklch(65% 0.2 320);
+  --color-accent-content: oklch(98% 0.01 320);
+  --color-neutral: oklch(30% 0.05 240);
+  --color-neutral-content: oklch(98% 0.01 240);
+  --color-info: oklch(70% 0.15 220);
+  --color-success: oklch(65% 0.2 140);
+  --color-warning: oklch(80% 0.2 80);
+  --color-error: oklch(65% 0.25 30);
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 1rem;
+}
+
+@plugin "daisyui/theme" {
+  name: "dark";
+  --color-base-100: oklch(16% 0.02 260);
+  --color-base-200: oklch(20% 0.025 260);
+  --color-base-300: oklch(24% 0.03 260);
+  --color-base-content: oklch(92% 0.02 240);
+  --color-primary: oklch(65% 0.25 260);
+  --color-primary-content: oklch(98% 0.01 260);
+  --color-secondary: oklch(70% 0.18 200);
+  --color-secondary-content: oklch(98% 0.01 200);
+  --color-accent: oklch(70% 0.2 320);
+  --color-accent-content: oklch(98% 0.01 320);
+  --color-neutral: oklch(80% 0.02 240);
+  --color-neutral-content: oklch(16% 0.02 240);
+  --color-info: oklch(70% 0.15 220);
+  --color-success: oklch(65% 0.2 140);
+  --color-warning: oklch(80% 0.2 80);
+  --color-error: oklch(65% 0.25 30);
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 1rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --glass-surface: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+
+  --breakpoint-xs: 30rem;
+}
+
+body {
+  background: var(--color-base-100);
+  color: var(--color-base-content);
+  font-family: Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Glassmorphism Utilities */
+.glass-panel {
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.dark .glass-panel {
+  background: rgba(15, 23, 42, 0.75);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-white {
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.dark .glass-panel-white {
+  background: rgba(30, 41, 59, 0.5);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.glass-panel-dark {
+  background: rgba(17, 25, 40, 0.75);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.125);
+}
+
+.bg-gradient-linear {
+  background-image: linear-gradient(to right, var(--tw-gradient-stops));
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Hide scrollbar but keep scrolling (e.g. sidebar nav) */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+
+/* Aurora Gradient Background - Sophisticated multi-stop gradient */
+.aurora-background {
+  background: linear-gradient(
+    135deg,
+    #e2e8f0 0%,     /* slate-229 - top-left */
+    #dbeafe 20%,    /* slate-229 → blue-159 blend */
+    #e0e1f4 40%,    /* subtle indigo tint */
+    #ebf0f8 60%,    /* slate-238 blend */
+    #f5f7fa 80%,    /* slate-249 blend */
+    #ffffff 100%    /* pure white - bottom-right */
+  );
+}
+
+/* Aurora Gradient for Dark Mode */
+.dark .aurora-background {
+  background: linear-gradient(
+    135deg,
+    #0f172a 0%,     /* slate-917 - deep slate top-left */
+    #1e1e2e 25%,    /* slate-917 → slate-918 blend */
+    #1f293d 50%,    /* slate-919 blend */
+    #212c37 70%,    /* slate-919 variant */
+    #1e293b 85%,    /* slate-947 blend */
+    #141e30 100%    /* slate-916 deep - bottom-right */
+  );
+}
+
+/* Aurora Gradient with Enhanced Contrast for Light Mode */
+.aurora-background-enhanced {
+  background: linear-gradient(
+    125deg,
+    #cfd9e8 0%,     /* slate-228 top-left - slightly darker start */
+    #d4def0 18%,    /* slate-228 mix */
+    #d9e4f8 32%,    /* slate-228 mix */
+    #e1ebfa 48%,    /* slate-238 blend */
+    #ebf3fc 62%,    /* slate-238 blend */
+    #f6f8fe 77%,    /* slate-251 mix */
+    #ffffff 95%,    /* white - almost pure */
+    #ffffff 100%
+  );
+}
+
+/* Aurora Gradient Enhanced for Dark Mode */
+.dark .aurora-background-enhanced {
+  background: linear-gradient(
+    125deg,
+    #0c1120 0%,     /* slate-913 - deep dark top-left */
+    #101825 20%,    /* slate-914 blend */
+    #151e2d 35%,    /* slate-915 blend */
+    #1a2640 50%,    /* slate-916 blend */
+    #1f2d4d 65%,    /* slate-916 variant */
+    #1e293b 80%,    /* slate-947 */
+    #0d132a 95%,    /* slate-912 */
+    #0a1020 100%    /* slate-912 deep dark */
+  );
+}
+
+/* Aurora Gradient with Subtle Grid Pattern Overlay */
+.aurora-background-pattern {
+  background: 
+    radial-gradient(circle at 25% 30%, rgba(79, 70, 229, 0.3), transparent 150px),
+    radial-gradient(circle at 75% 70%, rgba(103, 101, 168, 0.25), transparent 150px),
+    linear-gradient(
+      135deg,
+      #d9e1eb 0%,    /* slate-227 */
+      #e0e8f3 30%,   /* slate-228 blend */
+      #e8eff7 60%,   /* slate-238 blend */
+      #f2f6fc 100%   /* slate-248 blend */
+    );
+}
+
+/* Aurora Pattern for Dark Mode */
+.dark .aurora-background-pattern {
+  background: 
+    radial-gradient(circle at 25% 30%, rgba(79, 70, 229, 0.15), transparent 150px),
+    radial-gradient(circle at 75% 70%, rgba(103, 101, 168, 0.12), transparent 150px),
+    linear-gradient(
+      135deg,
+      #0f172a 0%,    /* slate-917 */
+      #162032 30%,   /* slate-917 blend */
+      #1c283b 60%,   /* slate-917 blend */
+      #1e293b 100%   /* slate-947 */
+    );
+}

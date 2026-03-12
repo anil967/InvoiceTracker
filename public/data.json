@@ -1,0 +1,62 @@
+[
+  {
+    "id": "INV-001",
+    "vendorName": "TechSolutions Inc.",
+    "amount": 1250.00,
+    "date": "2023-10-15",
+    "dueDate": "2023-11-15",
+    "status": "Pending Approval",
+    "items": [
+      { "description": "Web Hosting - Annual", "quantity": 1, "unitPrice": 1200.00, "total": 1200.00 },
+      { "description": "SSL Certificate", "quantity": 1, "unitPrice": 50.00, "total": 50.00 }
+    ],
+    "category": "IT Infrastructure"
+  },
+  {
+    "id": "INV-002",
+    "vendorName": "Office Supplies Co.",
+    "amount": 345.50,
+    "date": "2023-10-18",
+    "dueDate": "2023-11-01",
+    "status": "Approved",
+    "items": [
+      { "description": "Printer Paper (Box)", "quantity": 5, "unitPrice": 45.00, "total": 225.00 },
+      { "description": "Toner Cartridge", "quantity": 2, "unitPrice": 60.25, "total": 120.50 }
+    ],
+    "category": "Office Supplies"
+  },
+  {
+    "id": "INV-003",
+    "vendorName": "Marketing Gurus",
+    "amount": 5000.00,
+    "date": "2023-10-20",
+    "dueDate": "2023-11-20",
+    "status": "Processing",
+    "items": [
+      { "description": "Q4 Social Media Campaign", "quantity": 1, "unitPrice": 5000.00, "total": 5000.00 }
+    ],
+    "category": "Marketing"
+  },
+  {
+    "id": "INV-004",
+    "vendorName": "Cloud Services Ltd.",
+    "amount": 899.99,
+    "date": "2023-10-22",
+    "dueDate": "2023-11-22",
+    "status": "Digitizing",
+    "items": [],
+    "category": "Software"
+  },
+  {
+    "id": "INV-005",
+    "vendorName": "Logistics Pro",
+    "amount": 2100.00,
+    "date": "2023-10-25",
+    "dueDate": "2023-11-25",
+    "status": "Issue Detected",
+    "items": [
+        { "description": "Freight Charge #8892", "quantity": 1, "unitPrice": 2100.00, "total": 2100.00 }
+    ],
+    "category": "Logistics"
+  }
+]

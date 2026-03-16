@@ -30,8 +30,9 @@ export async function GET(request) {
         const vendorId = searchParams.get('vendorId');
         const status = searchParams.get('status');
 
-        // Find the PM for this Div Head (or Dept Head) for cascading
-        const pmUserId = await db.getPMForUser(session.user.id);
+        // Get all PMs managed by this Div Head for cascading visibility
+        // This is more robust than getPMForUser as it doesn't rely on a single hierarchy link
+        const managedPMs = await db.getPMsManagedByUser(session.user.id, session.user.role);
 
         let query = {};
         if (vendorId) query.vendorId = vendorId;
@@ -39,10 +40,13 @@ export async function GET(request) {
 
         const ratecards = await RateCard.find(query).sort({ created_at: -1 });
         
-        // Filter to only include rate cards accessible via cascading from PM
+        // Filter to only include rate cards accessible via cascading from any managed PM
         const accessibleCards = ratecards.filter(card => {
-            // Div Head sees rate cards if their parent PM is in pmUserIds
-            if (pmUserId && card.pmUserIds && card.pmUserIds.includes(pmUserId)) return true;
+            // Div Head sees rate cards if ANY of their managed PMs is in pmUserIds
+            if (managedPMs.length > 0 && card.pmUserIds &&
+                card.pmUserIds.some(pmId => managedPMs.includes(pmId))) return true;
+            // Also allow access if the user themselves is in pmUserIds (direct assignment)
+            if (card.pmUserIds && card.pmUserIds.includes(session.user.id)) return true;
             return false;
         });
 

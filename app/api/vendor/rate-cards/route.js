@@ -33,14 +33,20 @@ export async function GET() {
         await connectToDatabase();
 
         // Build query for active rate cards assigned to this vendor
+        const now = new Date();
         const conditions = [
             { vendorId: user.vendorId },
             { status: 'ACTIVE' },
             {
                 $or: [
-                    { effectiveTo: null },
-                    { effectiveTo: { $exists: false } },
-                    { effectiveTo: { $gte: new Date() } }
+                    {
+                        $and: [
+                            { effectiveFrom: { $lte: now } },
+                            { $or: [{ effectiveTo: { $gte: now } }, { effectiveTo: null }, { effectiveTo: { $exists: false } }] }
+                        ]
+                    },
+                    { effectiveFrom: null },
+                    { effectiveFrom: { $exists: false } }
                 ]
             }
         ];

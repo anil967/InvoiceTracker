@@ -35,10 +35,7 @@ export async function GET(request) {
         // Build query with effective date filters (same as vendor API)
         const now = new Date();
         let query = {};
-        if (vendorId) {
-            query.vendorId = vendorId;
-        }
-
+        
         // Status filter - default to ACTIVE if not specified
         if (status) {
             query.status = status;
@@ -46,16 +43,36 @@ export async function GET(request) {
             query.status = 'ACTIVE';
         }
 
-        // Add effective date filters
-        query.$and = [
-            { $or: [{ effectiveFrom: { $lte: now } }, { effectiveFrom: null }] },
-            { $or: [{ effectiveTo: { $gte: now } }, { effectiveTo: null }] }
+        // Add effective date filters - use flexible logic to include cards without date bounds
+        const dateConditions = [
+            {
+                $and: [
+                    { effectiveFrom: { $lte: now } },
+                    { $or: [{ effectiveTo: { $gte: now } }, { effectiveTo: null }, { effectiveTo: { $exists: false } }] }
+                ]
+            },
+            { effectiveFrom: null },
+            { effectiveFrom: { $exists: false } }
         ];
+        query.$or = dateConditions;
+
+        // PM-specific filtering: Only show rate cards for projects this PM is assigned to
+        // The pmUserIds array on rate cards contains PM user IDs who should have access
+        const user = await db.getUserById(session.user.id);
+        if (user && user.assignedProjects && user.assignedProjects.length > 0) {
+            // PM has assigned projects - filter rate cards by pmUserIds
+            query.pmUserIds = { $in: [session.user.id] };
+        }
+        // If PM has no assigned projects, they won't see any rate cards (query.pmUserIds will match nothing)
+
+        if (vendorId) {
+            query.vendorId = vendorId;
+        }
 
         const ratecards = await RateCard.find(query).sort({ created_at: -1 });
-        console.log('[PM RateCards API] Total ratecards matched:', ratecards.length);
+        console.log('[PM RateCards API] Total ratecards matched:', ratecards.length, 'for PM:', session.user.id);
 
-        // Use all matched rate cards (broad visibility for PM/Dept Head/Div Head)
+        // Filter to only rate cards relevant to this PM's projects
         const accessibleCards = ratecards;
 
         const enrichedCards = await Promise.all(accessibleCards.map(async (card) => {

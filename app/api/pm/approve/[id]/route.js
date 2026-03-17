@@ -34,9 +34,9 @@ export async function POST(request, { params }) {
         const body = await request.json();
         const { action, notes } = body;
 
-        if (!action || !['APPROVE', 'REJECT', 'REQUEST_INFO'].includes(action)) {
+        if (!action || !['APPROVE', 'REJECT', 'REQUEST_INFO', 'RECHECK'].includes(action)) {
             return NextResponse.json(
-                { error: 'Invalid action. Must be APPROVE, REJECT, or REQUEST_INFO' },
+                { error: 'Invalid action. Must be APPROVE, REJECT, REQUEST_INFO, or RECHECK' },
                 { status: 400 }
             );
         }
@@ -65,7 +65,8 @@ export async function POST(request, { params }) {
             'Pending',
             INVOICE_STATUS.SUBMITTED,
             INVOICE_STATUS.PENDING_PM_APPROVAL,
-            INVOICE_STATUS.MORE_INFO_NEEDED
+            INVOICE_STATUS.MORE_INFO_NEEDED,
+            INVOICE_STATUS.RECHECK_BY_DEPT_HEAD  // Dept Head sent back to PM
         ].includes(invoice.status) || !invoice.pmApproval?.status || invoice.pmApproval?.status === 'PENDING' || invoice.pmApproval?.status === 'INFO_REQUESTED';
 
         if (!allowPMReview) {
@@ -100,42 +101,57 @@ export async function POST(request, { params }) {
             'DIGITIZING': {
                 'APPROVE': PM_APPROVE_STATUS,
                 'REJECT': INVOICE_STATUS.PM_REJECTED,
-                'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED
+                'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED,
+                'RECHECK': INVOICE_STATUS.MORE_INFO_NEEDED  // PM re-check sends to Vendor
             },
             'VALIDATION_REQUIRED': {
                 'APPROVE': PM_APPROVE_STATUS,
                 'REJECT': INVOICE_STATUS.PM_REJECTED,
-                'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED
+                'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED,
+                'RECHECK': INVOICE_STATUS.MORE_INFO_NEEDED
             },
             'VERIFIED': {
                 'APPROVE': PM_APPROVE_STATUS,
                 'REJECT': INVOICE_STATUS.PM_REJECTED,
-                'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED
+                'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED,
+                'RECHECK': INVOICE_STATUS.MORE_INFO_NEEDED
             },
             'PENDING_APPROVAL': {
                 'APPROVE': PM_APPROVE_STATUS,
                 'REJECT': INVOICE_STATUS.PM_REJECTED,
-                'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED
+                'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED,
+                'RECHECK': INVOICE_STATUS.MORE_INFO_NEEDED
             },
             'MATCH_DISCREPANCY': {
                 'APPROVE': PM_APPROVE_STATUS,
                 'REJECT': INVOICE_STATUS.PM_REJECTED,
-                'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED
+                'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED,
+                'RECHECK': INVOICE_STATUS.MORE_INFO_NEEDED
             },
             [INVOICE_STATUS.SUBMITTED]: {
                 'APPROVE': PM_APPROVE_STATUS,
                 'REJECT': INVOICE_STATUS.PM_REJECTED,
-                'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED
+                'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED,
+                'RECHECK': INVOICE_STATUS.MORE_INFO_NEEDED
             },
             'Pending': {
                 'APPROVE': PM_APPROVE_STATUS,
                 'REJECT': INVOICE_STATUS.PM_REJECTED,
-                'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED
+                'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED,
+                'RECHECK': INVOICE_STATUS.MORE_INFO_NEEDED
             },
             [INVOICE_STATUS.MORE_INFO_NEEDED]: {
                 'APPROVE': PM_APPROVE_STATUS,
                 'REJECT': INVOICE_STATUS.PM_REJECTED,
-                'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED
+                'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED,
+                'RECHECK': INVOICE_STATUS.MORE_INFO_NEEDED
+            },
+            // PM acts on invoices returned by Dept Head re-check
+            [INVOICE_STATUS.RECHECK_BY_DEPT_HEAD]: {
+                'APPROVE': PM_APPROVE_STATUS,                  // Re-approve → back to Dept Head
+                'REJECT': INVOICE_STATUS.PM_REJECTED,          // PM rejects
+                'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED, // Request info from vendor
+                'RECHECK': INVOICE_STATUS.MORE_INFO_NEEDED     // Send to vendor for info
             }
         };
 
@@ -157,7 +173,7 @@ export async function POST(request, { params }) {
                 newStatus = PM_APPROVE_STATUS;
             } else if (action === 'REJECT') {
                 newStatus = INVOICE_STATUS.PM_REJECTED;
-            } else if (action === 'REQUEST_INFO') {
+            } else if (action === 'REQUEST_INFO' || action === 'RECHECK') {
                 newStatus = INVOICE_STATUS.MORE_INFO_NEEDED;
             }
             console.log('[PM Approve] Using fallback status transition:', { action, newStatus });
@@ -191,7 +207,8 @@ export async function POST(request, { params }) {
         const statusMap = {
             'APPROVE': 'APPROVED',
             'REJECT': 'REJECTED',
-            'REQUEST_INFO': 'INFO_REQUESTED'
+            'REQUEST_INFO': 'INFO_REQUESTED',
+            'RECHECK': 'INFO_REQUESTED'
         };
 
         const pmApproval = {
@@ -256,8 +273,8 @@ export async function POST(request, { params }) {
             auditTrailEntry
         });
 
-        // Automated Messaging for Info Request - notifies Vendor
-        if (action === 'REQUEST_INFO') {
+        // Automated Messaging for Info Request / Re-check - notifies Vendor
+        if (action === 'REQUEST_INFO' || action === 'RECHECK') {
             try {
                 await connectToDatabase();
 
@@ -364,7 +381,7 @@ export async function POST(request, { params }) {
 
         // Determine notification type based on action
         const notificationType = action === 'REJECT' ? 'REJECTED' :
-            action === 'REQUEST_INFO' ? 'AWAITING_INFO' :
+            action === 'REQUEST_INFO' || action === 'RECHECK' ? 'AWAITING_INFO' :
                 'PENDING_APPROVAL';
         await sendStatusNotification(updatedInvoice, notificationType).catch((err) =>
             console.error('[PM Approve] Notification failed:', err)
@@ -372,7 +389,7 @@ export async function POST(request, { params }) {
 
         // Determine workflow message based on action
         const workflowMessage = action === 'APPROVE' ? 'Proceeding to Department Head review' :
-            action === 'REQUEST_INFO' ? 'Awaiting information from vendor' :
+            action === 'REQUEST_INFO' || action === 'RECHECK' ? 'Awaiting information from vendor' :
                 'Workflow ended at PM stage';
 
         return NextResponse.json({

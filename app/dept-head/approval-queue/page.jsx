@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,6 +27,8 @@ const PM_STATUS_MAP = {
 const STATUS_STYLES = {
     [INVOICE_STATUS.PENDING_DEPT_HEAD_REVIEW]: { bg: 'bg-teal-50', text: 'text-teal-700', dot: 'bg-teal-500', label: 'Pending Review' },
     'Pending Dept Head Review': { bg: 'bg-teal-50', text: 'text-teal-700', dot: 'bg-teal-500', label: 'Pending Review' },
+    [INVOICE_STATUS.RECHECK_BY_DIV_HEAD]: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500', label: 'Re-check Requested' },
+    'Re-check by Div Head': { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500', label: 'Re-check Requested' },
     [INVOICE_STATUS.PENDING_DIV_HEAD_REVIEW]: { bg: 'bg-indigo-50', text: 'text-indigo-700', dot: 'bg-indigo-500', label: 'Sent to Div Head' },
     'Pending Div Head Review': { bg: 'bg-indigo-50', text: 'text-indigo-700', dot: 'bg-indigo-500', label: 'Sent to Div Head' },
     [INVOICE_STATUS.DIV_HEAD_APPROVED]: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500', label: 'Final Approved' },
@@ -258,8 +260,14 @@ export default function DeptHeadApprovalQueuePage() {
         'Div Head Approved',
     ];
 
+    const DEPT_HEAD_RECHECK_STATUSES = [
+        INVOICE_STATUS.RECHECK_BY_DIV_HEAD,
+        'Re-check by Div Head',
+    ];
+
     const tabs = useMemo(() => ({
         pending: allInvoices.filter(inv => DEPT_HEAD_PENDING_STATUSES.includes(inv.status)),
+        recheck: allInvoices.filter(inv => DEPT_HEAD_RECHECK_STATUSES.includes(inv.status)),
         reviewed: allInvoices.filter(inv => DEPT_HEAD_APPROVED_STATUSES.includes(inv.status)),
         rejected: allInvoices.filter(inv =>
             inv.status === INVOICE_STATUS.DEPT_HEAD_REJECTED ||
@@ -272,12 +280,14 @@ export default function DeptHeadApprovalQueuePage() {
 
     const TABS = [
         { key: 'pending', label: 'Pending', icon: 'Clock', color: 'teal' },
+        { key: 'recheck', label: 'Re-check', icon: 'RotateCcw', color: 'amber' },
         { key: 'reviewed', label: 'Forwarded', icon: 'CheckCircle2', color: 'emerald' },
         { key: 'rejected', label: 'Rejected', icon: 'XCircle', color: 'rose' },
     ];
 
     const TAB_COLORS = {
         teal: { active: 'bg-teal-600 text-white shadow-sm', dot: 'bg-teal-500', badge: 'bg-teal-100 text-teal-700' },
+        amber: { active: 'bg-amber-500 text-white shadow-sm', dot: 'bg-amber-400', badge: 'bg-amber-100 text-amber-700' },
         emerald: { active: 'bg-emerald-600 text-white shadow-sm', dot: 'bg-emerald-500', badge: 'bg-emerald-100 text-emerald-700' },
         rose: { active: 'bg-rose-600 text-white shadow-sm', dot: 'bg-rose-500', badge: 'bg-rose-100 text-rose-700' },
     };
@@ -388,21 +398,16 @@ export default function DeptHeadApprovalQueuePage() {
                                                 </div>
                                             </div>
                                             <div className="flex items-center justify-between gap-3 mt-2">
-                                                <div className="flex items-center gap-1.5">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
                                                     <span className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-lg ${pmSc.bg} ${pmSc.text}`}>
                                                         <span className={`w-1.5 h-1.5 rounded-full ${pmSc.dot}`} />
                                                         PM: {pmSc.label}
                                                     </span>
-                                                    <LifecycleProgressTracker
-                                                        invoice={inv}
-                                                        options={{
-                                                            className: "rounded-xl border border-slate-200 dark:border-slate-800",
-                                                            showConnectorLines: true,
-                                                            highlightActive: true,
-                                                            showProgressBar: true,
-                                                            compact: false
-                                                        }}
-                                                    />
+                                                    {(inv.status === INVOICE_STATUS.RECHECK_BY_DIV_HEAD || inv.status === 'Re-check by Div Head') && (
+                                                        <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200">
+                                                            <Icon name="RotateCcw" size={9} /> Returned by Div Head
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <Icon name="ChevronRight" size={14} className="text-slate-300 group-hover:text-teal-500 transition-colors" />
                                             </div>
@@ -628,11 +633,72 @@ export default function DeptHeadApprovalQueuePage() {
                                         </div>
                                     </Section>
 
+                                    {/* Re-check History */}
+                                    {(() => {
+                                        const recheckHistory = (reviewInvoice.auditTrail || []).filter(entry =>
+                                            entry.action === 'RECHECK' ||
+                                            entry.action === 'REQUEST_INFO' ||
+                                            entry.newStatus === 'More Info Needed'
+                                        );
+                                        if (recheckHistory.length === 0) return null;
+                                        return (
+                                            <Section title="Re-check History" icon="History" accent="violet">
+                                                <div className="space-y-2">
+                                                    {recheckHistory.slice().reverse().map((entry, idx) => (
+                                                        <div key={idx} className="flex items-start gap-3 p-3 bg-violet-50 rounded-xl border border-violet-100">
+                                                            <div className="w-8 h-8 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center shrink-0">
+                                                                <Icon name="RotateCcw" size={14} />
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                    <p className="text-xs font-bold text-violet-700">
+                                                                        {entry.action === 'REQUEST_INFO' ? 'Sent to Vendor' : 'Sent back for Re-check'}
+                                                                    </p>
+                                                                    <span className="text-[10px] text-violet-500">
+                                                                        {fmtDateTime(entry.timestamp)}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-[10px] text-violet-600 mt-0.5">
+                                                                    By: <span className="font-semibold">{entry.actor || entry.actorRole || 'Unknown'}</span>
+                                                                    {entry.actorRole && <span className="opacity-70"> ({entry.actorRole})</span>}
+                                                                </p>
+                                                                {entry.notes && (
+                                                                    <p className="text-[10px] text-slate-500 mt-1 italic">"{entry.notes}"</p>
+                                                                )}
+                                                                {entry.previousStatus && entry.newStatus && (
+                                                                    <div className="flex items-center gap-1 mt-1 text-[9px] text-slate-400">
+                                                                        <span className="font-mono">{entry.previousStatus}</span>
+                                                                        <Icon name="ArrowRight" size={8} />
+                                                                        <span className="font-mono">{entry.newStatus}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </Section>
+                                        );
+                                    })()}
+
                                     {/* Actions */}
                                     {(reviewInvoice.status === INVOICE_STATUS.PENDING_DEPT_HEAD_REVIEW ||
-                                        reviewInvoice.status === 'Pending Dept Head Review') && (
+                                        reviewInvoice.status === 'Pending Dept Head Review' ||
+                                        reviewInvoice.status === INVOICE_STATUS.RECHECK_BY_DIV_HEAD ||
+                                        reviewInvoice.status === 'Re-check by Div Head') && (
                                             <div className="sticky bottom-0 bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
                                                 <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Take Action</h3>
+
+                                                {/* Re-check returned banner */}
+                                                {(reviewInvoice.status === INVOICE_STATUS.RECHECK_BY_DIV_HEAD ||
+                                                    reviewInvoice.status === 'Re-check by Div Head') && (
+                                                    <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 mb-2">
+                                                        <Icon name="RotateCcw" size={14} className="shrink-0" />
+                                                        <div>
+                                                            <p className="text-xs font-bold">Returned by Divisional Head for re-check</p>
+                                                            <p className="text-[10px] opacity-70 mt-0.5">Review and re-approve to forward back to Div Head, or re-check to PM.</p>
+                                                        </div>
+                                                    </div>
+                                                )}
 
                                                 {actionType && (
                                                     <div className="space-y-2">
@@ -677,6 +743,11 @@ export default function DeptHeadApprovalQueuePage() {
                                                                 className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-amber-200 text-amber-600 hover:bg-amber-50 font-semibold text-sm transition-all">
                                                                 <Icon name="MessageSquare" size={13} />
                                                                 Request Info
+                                                            </button>
+                                                            <button onClick={() => setActionType('RECHECK')}
+                                                                className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-violet-200 text-violet-600 hover:bg-violet-50 font-semibold text-sm transition-all">
+                                                                <Icon name="RotateCcw" size={13} />
+                                                                Re-check
                                                             </button>
                                                             <button onClick={() => handleAction(reviewInvoice.id, 'APPROVE')}
                                                                 disabled={!!processingId}

@@ -102,12 +102,14 @@ const InvoiceSchema = new mongoose.Schema({
             'Pending PM Approval',          // Awaiting PM review
             'PM Approved',                  // PM approved, ready for Dept Head
             'PM Rejected',                  // PM rejected
-            'More Info Needed',             // PM/Dept Head/Div Head requests additional info
+            'More Info Needed',             // PM/Dept Head/Div Head requests additional info (sends to vendor)
             'Pending Dept Head Review',     // Awaiting Dept Head review after PM approval
             'Dept Head Rejected',           // Dept Head rejected
+            'Re-check by Dept Head',        // Dept Head sent back to PM for re-check
             'Pending Div Head Review',      // Awaiting Div Head review after Dept Head approval
             'Div Head Approved',            // Div Head approved - final state
             'Div Head Rejected',            // Div Head rejected - final state
+            'Re-check by Div Head',         // Div Head sent back to Dept Head for re-check
             // Legacy statuses (kept for backward compatibility)
             'Pending Finance Review',       // Legacy: Awaiting Finance review after PM approval
             'Finance Approved',             // Legacy: Finance approved - final state

@@ -31,9 +31,9 @@ export async function POST(request, { params }) {
         const body = await request.json();
         const { action, notes } = body;
 
-        if (!action || !['APPROVE', 'REJECT', 'REQUEST_INFO'].includes(action)) {
+        if (!action || !['APPROVE', 'REJECT', 'REQUEST_INFO', 'RECHECK'].includes(action)) {
             return NextResponse.json(
-                { error: 'Invalid action. Must be APPROVE, REJECT, or REQUEST_INFO' },
+                { error: 'Invalid action. Must be APPROVE, REJECT, REQUEST_INFO, or RECHECK' },
                 { status: 400 }
             );
         }
@@ -52,6 +52,8 @@ export async function POST(request, { params }) {
         const VALID_DEPT_HEAD_STATUSES = [
             INVOICE_STATUS.PENDING_DEPT_HEAD_REVIEW,
             'Pending Dept Head Review',
+            INVOICE_STATUS.RECHECK_BY_DIV_HEAD,      // Div Head returned for re-check
+            'Re-check by Div Head',
         ];
 
         if (!VALID_DEPT_HEAD_STATUSES.includes(invoice.status)) {
@@ -65,13 +67,14 @@ export async function POST(request, { params }) {
         const DEPT_HEAD_ACTION = {
             'APPROVE': INVOICE_STATUS.PENDING_DIV_HEAD_REVIEW,
             'REJECT': INVOICE_STATUS.DEPT_HEAD_REJECTED,
-            'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED
+            'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED,    // Sends to Vendor
+            'RECHECK': INVOICE_STATUS.RECHECK_BY_DEPT_HEAD       // Sends back to PM
         };
 
         const newStatus = DEPT_HEAD_ACTION[action];
 
         // Dept Head approval record
-        const statusMap = { 'APPROVE': 'APPROVED', 'REJECT': 'REJECTED', 'REQUEST_INFO': 'INFO_REQUESTED' };
+        const statusMap = { 'APPROVE': 'APPROVED', 'REJECT': 'REJECTED', 'REQUEST_INFO': 'INFO_REQUESTED', 'RECHECK': 'INFO_REQUESTED' };
         const userRole = getNormalizedRole(session.user);
 
         const deptHeadApproval = {
@@ -155,6 +158,35 @@ export async function POST(request, { params }) {
             }
         }
 
+        // Notify PM on recheck
+        if (action === 'RECHECK') {
+            try {
+                await connectToDatabase();
+                const pmId = invoice.assignedPM;
+                if (pmId) {
+                    const pm = await db.getUserById(pmId);
+                    const invoiceLabel = updatedInvoice.invoiceNumber || updatedInvoice.id.slice(-6);
+                    const msgId = uuidv4();
+                    await Message.create({
+                        id: msgId,
+                        invoiceId: updatedInvoice.id,
+                        projectId: updatedInvoice.project || null,
+                        senderId: session.user.id,
+                        senderName: session.user.name || session.user.email,
+                        senderRole: userRole,
+                        recipientId: pmId,
+                        recipientName: pm?.name || 'Project Manager',
+                        subject: `Re-check Requested: Invoice ${invoiceLabel} sent back to you`,
+                        content: `Invoice ${invoiceLabel} has been returned for re-check by Department Head.${notes ? ' Reason: ' + notes : ' Please review and re-approve.'}`,
+                        messageType: 'INFO_REQUEST',
+                        threadId: msgId
+                    });
+                }
+            } catch (msgErr) {
+                console.error('[Dept Head Approve] Failed to notify PM on recheck:', msgErr);
+            }
+        }
+
         // Notify PM on rejection
         if (action === 'REJECT') {
             try {
@@ -185,7 +217,9 @@ export async function POST(request, { params }) {
         }
 
         const notificationType = action === 'APPROVE' ? 'PENDING_APPROVAL' :
-            action === 'REJECT' ? 'REJECTED' : 'AWAITING_INFO';
+            action === 'REJECT' ? 'REJECTED' :
+            action === 'RECHECK' ? 'PENDING_APPROVAL' :  // Re-check sends back to PM for review
+                'AWAITING_INFO';
         await sendStatusNotification(updatedInvoice, notificationType).catch(err =>
             console.error('[Dept Head Approve] Notification failed:', err)
         );
@@ -195,7 +229,8 @@ export async function POST(request, { params }) {
             message: `Department Head ${action.toLowerCase().replace('_', ' ')} invoice successfully`,
             newStatus,
             workflow: action === 'APPROVE' ? 'Proceeding to Divisional Head review' :
-                action === 'REQUEST_INFO' ? 'Awaiting additional information' :
+                action === 'RECHECK' ? 'Sent back to PM for re-check' :
+                action === 'REQUEST_INFO' ? 'Awaiting additional information from vendor' :
                     'Workflow ended at Department Head stage'
         });
     } catch (error) {

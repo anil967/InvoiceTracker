@@ -141,6 +141,8 @@ export default function PMApprovalQueuePage() {
             (inv.assignedPM === user.id || inv.assignedPM === user.email) &&
             (inv.status === INVOICE_STATUS.PENDING_PM_APPROVAL ||
                 inv.status === INVOICE_STATUS.MORE_INFO_NEEDED ||
+                inv.status === INVOICE_STATUS.RECHECK_BY_DEPT_HEAD || // Dept Head sent back
+                inv.status === 'Re-check by Dept Head' ||
                 inv.pmApproval?.status === 'PENDING' ||
                 inv.pmApproval?.status === 'APPROVED' ||
                 inv.pmApproval?.status === 'REJECTED' ||
@@ -264,14 +266,23 @@ export default function PMApprovalQueuePage() {
 
     /* ── Tabs ── */
     const pendingCount = myInvoices.filter(i => !i.pmApproval?.status || i.pmApproval?.status === 'PENDING').length;
-    const recheckCount = myInvoices.filter(i => i.pmApproval?.status === 'INFO_REQUESTED').length;
+    // Re-check tab: invoices returned by Dept Head + PM→Vendor rechecks (INFO_REQUESTED)
+    const recheckCount = myInvoices.filter(i =>
+        i.status === INVOICE_STATUS.RECHECK_BY_DEPT_HEAD ||
+        i.status === 'Re-check by Dept Head' ||
+        i.pmApproval?.status === 'INFO_REQUESTED'
+    ).length;
     const approvedCount = myInvoices.filter(i => i.pmApproval?.status === 'APPROVED').length;
     const rejectedCount = myInvoices.filter(i => i.pmApproval?.status === 'REJECTED').length;
 
     const filteredInvoices = useMemo(() => {
         switch (activeTab) {
             case 'pending': return myInvoices.filter(i => !i.pmApproval?.status || i.pmApproval?.status === 'PENDING');
-            case 'recheck': return myInvoices.filter(i => i.pmApproval?.status === 'INFO_REQUESTED');
+            case 'recheck': return myInvoices.filter(i =>
+                i.status === INVOICE_STATUS.RECHECK_BY_DEPT_HEAD ||
+                i.status === 'Re-check by Dept Head' ||
+                i.pmApproval?.status === 'INFO_REQUESTED'
+            );
             case 'approved': return myInvoices.filter(i => i.pmApproval?.status === 'APPROVED');
             case 'rejected': return myInvoices.filter(i => i.pmApproval?.status === 'REJECTED');
             case 'status': return myInvoices;
@@ -281,20 +292,26 @@ export default function PMApprovalQueuePage() {
 
     const tabs = [
         { key: 'pending', label: 'Pending Review', count: pendingCount, icon: 'Clock', active: 'bg-indigo-50 text-indigo-700 border-indigo-200', badge: 'bg-indigo-100 text-indigo-700' },
-        { key: 'recheck', label: 'Re-check Sent', count: recheckCount, icon: 'RefreshCw', active: 'bg-amber-50 text-amber-700 border-amber-200', badge: 'bg-amber-100 text-amber-700' },
+        { key: 'recheck', label: 'Re-check', count: recheckCount, icon: 'RotateCcw', active: 'bg-amber-50 text-amber-700 border-amber-200', badge: 'bg-amber-100 text-amber-700' },
         { key: 'approved', label: 'Approved', count: approvedCount, icon: 'CheckCircle2', active: 'bg-emerald-50 text-emerald-700 border-emerald-200', badge: 'bg-emerald-100 text-emerald-700' },
         { key: 'rejected', label: 'Rejected', count: rejectedCount, icon: 'XCircle', active: 'bg-rose-50 text-rose-700 border-rose-200', badge: 'bg-rose-100 text-rose-700' },
         { key: 'all', label: 'All', count: myInvoices.length, icon: 'LayoutList', active: 'bg-slate-100 text-slate-700 border-slate-200', badge: 'bg-slate-200 text-slate-700' },
         { key: 'status', label: 'Status', count: myInvoices.length, icon: 'Activity', active: 'bg-sky-50 text-sky-700 border-sky-200', badge: 'bg-sky-100 text-sky-700' },
     ];
 
-    const isPending = (inv) => !inv?.pmApproval?.status || inv?.pmApproval?.status === 'PENDING' || inv?.pmApproval?.status === 'INFO_REQUESTED';
+    // isPending: show action buttons if PM hasn't decided yet, OR if invoice was returned by Dept Head for re-check
+    const isPending = (inv) =>
+        !inv?.pmApproval?.status ||
+        inv?.pmApproval?.status === 'PENDING' ||
+        inv?.pmApproval?.status === 'INFO_REQUESTED' ||
+        inv?.status === INVOICE_STATUS.RECHECK_BY_DEPT_HEAD ||
+        inv?.status === 'Re-check by Dept Head';
 
     /* ── Action colour map ── */
     const ACTION_COLOR = {
         approve: { bg: 'bg-emerald-600', hover: 'hover:bg-emerald-700', ring: 'focus:ring-emerald-300', label: 'Confirm Approval', icon: 'CheckCircle2', strip: 'bg-emerald-50 border-emerald-200 text-emerald-700', msg: 'Approving invoice — will forward to Department Head' },
         reject: { bg: 'bg-rose-600', hover: 'hover:bg-rose-700', ring: 'focus:ring-rose-300', label: 'Confirm Rejection', icon: 'XCircle', strip: 'bg-rose-50 border-rose-200 text-rose-700', msg: 'Rejecting this invoice — vendor will be notified' },
-        recheck: { bg: 'bg-amber-500', hover: 'hover:bg-amber-600', ring: 'focus:ring-amber-300', label: 'Send Re-check', icon: 'RefreshCw', strip: 'bg-amber-50 border-amber-200 text-amber-700', msg: 'Requesting additional information from vendor' },
+        recheck: { bg: 'bg-amber-500', hover: 'hover:bg-amber-600', ring: 'focus:ring-amber-300', label: 'Send Re-check to Vendor', icon: 'RotateCcw', strip: 'bg-amber-50 border-amber-200 text-amber-700', msg: 'Requesting additional information from vendor' },
     };
 
     return (
@@ -484,9 +501,14 @@ export default function PMApprovalQueuePage() {
                                                                 <Icon name="Calendar" size={10} /> {inv.billingMonth || (inv.invoiceDate || inv.date)?.substring(0, 7)}
                                                             </span>
                                                         )}
-                                                        {pmSt === 'INFO_REQUESTED' && (
+                                                        {(inv.status === INVOICE_STATUS.RECHECK_BY_DEPT_HEAD || inv.status === 'Re-check by Dept Head') && (
+                                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200">
+                                                                <Icon name="RotateCcw" size={10} /> Returned by Dept Head
+                                                            </span>
+                                                        )}
+                                                        {pmSt === 'INFO_REQUESTED' && inv.status !== INVOICE_STATUS.RECHECK_BY_DEPT_HEAD && inv.status !== 'Re-check by Dept Head' && (
                                                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">
-                                                                <Icon name="RefreshCw" size={10} /> Re-check sent
+                                                                <Icon name="RefreshCw" size={10} /> Re-check sent to Vendor
                                                             </span>
                                                         )}
                                                     </div>
@@ -779,6 +801,53 @@ export default function PMApprovalQueuePage() {
                                                 <p className="text-sm text-slate-700 whitespace-pre-wrap">{reviewInvoice.notes}</p>
                                             </Section>
                                         )}
+
+                                        {/* 6. Re-check History */}
+                                        {(() => {
+                                            const recheckHistory = (reviewInvoice.auditTrail || []).filter(entry =>
+                                                entry.action === 'RECHECK' ||
+                                                entry.action === 'REQUEST_INFO' ||
+                                                entry.newStatus === 'More Info Needed'
+                                            );
+                                            if (recheckHistory.length === 0) return null;
+                                            return (
+                                                <Section title="Re-check History" icon="History" accent="violet">
+                                                    <div className="space-y-2">
+                                                        {recheckHistory.slice().reverse().map((entry, idx) => (
+                                                            <div key={idx} className="flex items-start gap-3 p-3 bg-violet-50 rounded-xl border border-violet-100">
+                                                                <div className="w-8 h-8 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center shrink-0">
+                                                                    <Icon name="RotateCcw" size={14} />
+                                                                </div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                                        <p className="text-xs font-bold text-violet-700">
+                                                                            {entry.action === 'REQUEST_INFO' ? 'Sent to Vendor' : 'Sent back for Re-check'}
+                                                                        </p>
+                                                                        <span className="text-[10px] text-violet-500">
+                                                                            {fmtDateTime(entry.timestamp)}
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className="text-[10px] text-violet-600 mt-0.5">
+                                                                        By: <span className="font-semibold">{entry.actor || entry.actorRole || 'Unknown'}</span>
+                                                                        {entry.actorRole && <span className="opacity-70"> ({entry.actorRole})</span>}
+                                                                    </p>
+                                                                    {entry.notes && (
+                                                                        <p className="text-[10px] text-slate-500 mt-1 italic">"{entry.notes}"</p>
+                                                                    )}
+                                                                    {entry.previousStatus && entry.newStatus && (
+                                                                        <div className="flex items-center gap-1 mt-1 text-[9px] text-slate-400">
+                                                                            <span className="font-mono">{entry.previousStatus}</span>
+                                                                            <Icon name="ArrowRight" size={8} />
+                                                                            <span className="font-mono">{entry.newStatus}</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </Section>
+                                            );
+                                        })()}
                                     </>
                                 ) : (
                                     <p className="text-sm text-slate-400 text-center py-20">No invoice selected.</p>
@@ -844,13 +913,30 @@ export default function PMApprovalQueuePage() {
                                         <Icon name={reviewInvoice.pmApproval?.status === 'APPROVED' ? 'CheckCircle2' : 'XCircle'} size={16} />
                                         <div>
                                             <span className="text-sm font-bold">
-                                                {reviewInvoice.pmApproval?.status === 'APPROVED' ? 'You approved this invoice — forwarded to Department Head' : 'You rejected this invoice'}
+                                                {reviewInvoice.pmApproval?.status === 'APPROVED'
+                                                    ? 'You approved this invoice — forwarded to Department Head'
+                                                    : 'You rejected this invoice'}
                                             </span>
                                             {reviewInvoice.pmApproval?.approvedAt && (
                                                 <p className="text-[10px] opacity-70 mt-0.5">
                                                     {fmtDateTime(reviewInvoice.pmApproval.approvedAt)}
                                                 </p>
                                             )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Re-check returned banner — shown above the action buttons when Dept Head sent invoice back */}
+                            {reviewInvoice &&
+                                (reviewInvoice.status === INVOICE_STATUS.RECHECK_BY_DEPT_HEAD ||
+                                    reviewInvoice.status === 'Re-check by Dept Head') && (
+                                <div className="px-6 pt-3 shrink-0">
+                                    <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800">
+                                        <Icon name="RotateCcw" size={15} className="shrink-0" />
+                                        <div>
+                                            <p className="text-xs font-bold">Returned by Department Head for re-check</p>
+                                            <p className="text-[10px] opacity-70 mt-0.5">Please review and re-approve or reject below.</p>
                                         </div>
                                     </div>
                                 </div>

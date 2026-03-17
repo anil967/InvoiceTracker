@@ -31,9 +31,9 @@ export async function POST(request, { params }) {
         const body = await request.json();
         const { action, notes } = body;
 
-        if (!action || !['APPROVE', 'REJECT', 'REQUEST_INFO'].includes(action)) {
+        if (!action || !['APPROVE', 'REJECT', 'REQUEST_INFO', 'RECHECK'].includes(action)) {
             return NextResponse.json(
-                { error: 'Invalid action. Must be APPROVE, REJECT, or REQUEST_INFO' },
+                { error: 'Invalid action. Must be APPROVE, REJECT, REQUEST_INFO, or RECHECK' },
                 { status: 400 }
             );
         }
@@ -65,12 +65,13 @@ export async function POST(request, { params }) {
         const DIV_HEAD_ACTION = {
             'APPROVE': INVOICE_STATUS.DIV_HEAD_APPROVED,
             'REJECT': INVOICE_STATUS.DIV_HEAD_REJECTED,
-            'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED
+            'REQUEST_INFO': INVOICE_STATUS.MORE_INFO_NEEDED,  // Sends to Vendor
+            'RECHECK': INVOICE_STATUS.RECHECK_BY_DIV_HEAD     // Sends back to Dept Head
         };
 
         const newStatus = DIV_HEAD_ACTION[action];
 
-        const statusMap = { 'APPROVE': 'APPROVED', 'REJECT': 'REJECTED', 'REQUEST_INFO': 'INFO_REQUESTED' };
+        const statusMap = { 'APPROVE': 'APPROVED', 'REJECT': 'REJECTED', 'REQUEST_INFO': 'INFO_REQUESTED', 'RECHECK': 'INFO_REQUESTED' };
         const userRole = getNormalizedRole(session.user);
 
         const divHeadApproval = {
@@ -107,6 +108,35 @@ export async function POST(request, { params }) {
             auditDetails,
             auditTrailEntry
         });
+
+        // Notify Dept Head on recheck
+        if (action === 'RECHECK') {
+            try {
+                await connectToDatabase();
+                const deptHeadId = invoice.assignedDeptHead;
+                if (deptHeadId) {
+                    const deptHead = await db.getUserById(deptHeadId);
+                    const invoiceLabel = updatedInvoice.invoiceNumber || updatedInvoice.id.slice(-6);
+                    const msgId = uuidv4();
+                    await Message.create({
+                        id: msgId,
+                        invoiceId: updatedInvoice.id,
+                        projectId: updatedInvoice.project || null,
+                        senderId: session.user.id,
+                        senderName: session.user.name || session.user.email,
+                        senderRole: userRole,
+                        recipientId: deptHeadId,
+                        recipientName: deptHead?.name || 'Department Head',
+                        subject: `Re-check Requested: Invoice ${invoiceLabel} sent back to you`,
+                        content: `Invoice ${invoiceLabel} has been returned for re-check by Divisional Head.${notes ? ' Reason: ' + notes : ' Please review and re-forward.'}`,
+                        messageType: 'INFO_REQUEST',
+                        threadId: msgId
+                    });
+                }
+            } catch (msgErr) {
+                console.error('[Div Head Approve] Failed to notify Dept Head on recheck:', msgErr);
+            }
+        }
 
         // Notify on rejection → send back to Dept Head
         if (action === 'REJECT') {
@@ -212,7 +242,9 @@ export async function POST(request, { params }) {
         }
 
         const notificationType = action === 'APPROVE' ? 'FINANCE_APPROVED' :
-            action === 'REJECT' ? 'FINANCE_REJECTED' : 'AWAITING_INFO';
+            action === 'REJECT' ? 'FINANCE_REJECTED' :
+            action === 'RECHECK' ? 'PENDING_APPROVAL' :  // Re-check sends back to Dept Head for review
+                'AWAITING_INFO';
         await sendStatusNotification(updatedInvoice, notificationType).catch(err =>
             console.error('[Div Head Approve] Notification failed:', err)
         );
@@ -222,6 +254,7 @@ export async function POST(request, { params }) {
             message: `Divisional Head ${action.toLowerCase().replace('_', ' ')} invoice successfully`,
             newStatus,
             workflow: action === 'APPROVE' ? 'Invoice finally approved — workflow complete' :
+                action === 'RECHECK' ? 'Sent back to Department Head for re-check' :
                 action === 'REQUEST_INFO' ? 'Awaiting additional information' :
                     'Workflow ended at Divisional Head stage'
         });
